@@ -5,20 +5,23 @@
 set -e
 
 PORT="${CAMOFOX_PORT:-9377}"
+# SESSION_USER_ID must match the userId the agent uses so that the human's
+# noVNC login and the agent's API calls share the same persistent profile.
+SESSION_USER_ID="${SESSION_USER_ID:-agent}"
 WELCOME_URL="https://example.com"
 
 open_welcome_tab() {
   curl -sf -X POST "http://localhost:${PORT}/tabs" \
     ${CAMOFOX_ACCESS_KEY:+-H "Authorization: Bearer $CAMOFOX_ACCESS_KEY"} \
     -H "Content-Type: application/json" \
-    -d "{\"userId\":\"_welcome\",\"sessionKey\":\"default\",\"url\":\"${WELCOME_URL}\"}" \
+    -d "{\"userId\":\"${SESSION_USER_ID}\",\"sessionKey\":\"default\",\"url\":\"${WELCOME_URL}\"}" \
     > /dev/null
 }
 
 welcome_tab_open() {
-  tabs=$(curl -sf "http://localhost:${PORT}/tabs?userId=_welcome" \
+  tabs=$(curl -sf "http://localhost:${PORT}/tabs" \
     ${CAMOFOX_ACCESS_KEY:+-H "Authorization: Bearer $CAMOFOX_ACCESS_KEY"} 2>/dev/null)
-  # true if the tabs array is non-empty
+  # true if any tab exists (the welcome tab is the only one at idle)
   echo "$tabs" | grep -qv '"tabs":\[\]'
 }
 

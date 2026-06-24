@@ -59,7 +59,9 @@ WORKDIR /app
 
 COPY package.json ./
 COPY scripts/ ./scripts/
-RUN npm install --production
+RUN npm install --production \
+    && sed -i 's/isMobile: !!this._options.isMobile,*//' \
+       /app/node_modules/playwright-core/lib/coreBundle.js
 
 COPY server.js ./
 COPY camofox.config.json ./

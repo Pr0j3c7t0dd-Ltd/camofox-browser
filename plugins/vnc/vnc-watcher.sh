@@ -45,12 +45,19 @@ websockify --web "$NOVNC_DIR" "$VNC_BIND:$NOVNC_PORT" "127.0.0.1:$VNC_PORT" >/va
 log "VNC watcher started -- will attach x11vnc when Camoufox's Xvfb appears"
 
 while true; do
-  # Find Xvfb with our patched resolution
-  FOUND=$(ps -eo args= 2>/dev/null | awk -v res="$VNC_RESOLUTION" '
-    /\/Xvfb :[0-9]+/ && index($0, res) {
-      for (i=1;i<=NF;i++) if ($i ~ /^:[0-9]+$/) { print $i; exit }
-    }
-  ' | head -1)
+  # Find the display number by looking at X11 Unix sockets.
+  # camoufox-js launches Xvfb with -displayfd (no :N in args), so we cannot
+  # match on process args. Instead, find the first socket in /tmp/.X11-unix/
+  # that belongs to a running Xvfb process.
+  FOUND=""
+  if pgrep -x Xvfb > /dev/null 2>&1; then
+    for sock in /tmp/.X11-unix/X[0-9]*; do
+      [ -S "$sock" ] || continue
+      n="${sock##/tmp/.X11-unix/X}"
+      FOUND=":$n"
+      break
+    done
+  fi
 
   if [ -n "$FOUND" ] && [ "$FOUND" != "$CURRENT_DISPLAY" ]; then
     # New or changed display -- (re)attach x11vnc
@@ -63,7 +70,7 @@ while true; do
     CURRENT_DISPLAY="$FOUND"
     log "Attaching x11vnc to DISPLAY=$CURRENT_DISPLAY"
 
-    X11VNC_ARGS="-display $CURRENT_DISPLAY -forever -shared -rfbport $VNC_PORT -noxdamage -quiet -bg -o /var/log/x11vnc.log"
+    X11VNC_ARGS="-display $CURRENT_DISPLAY -forever -shared -rfbport $VNC_PORT -noxdamage -noshm -quiet -bg -o /var/log/x11vnc.log"
     [ "${VIEW_ONLY:-0}" = "1" ] && X11VNC_ARGS="$X11VNC_ARGS -viewonly"
     if [ -n "$PASSFILE" ]; then
       X11VNC_ARGS="$X11VNC_ARGS -rfbauth $PASSFILE"

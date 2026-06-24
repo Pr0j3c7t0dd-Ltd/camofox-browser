@@ -68,16 +68,18 @@ COPY camofox.config.json ./
 COPY lib/ ./lib/
 COPY plugins/ ./plugins/
 COPY scripts/ ./scripts/
+COPY bin/ ./bin/
 
 # Install default plugin dependencies (apt packages + post-install hooks)
-RUN sh scripts/install-plugin-deps.sh
+RUN sh scripts/install-plugin-deps.sh \
+    && chmod +x /app/bin/start.sh
 
 ENV NODE_ENV=production
 ENV CAMOFOX_PORT=9377
 
 EXPOSE 9377
 
-CMD ["sh", "-c", "node --max-old-space-size=${MAX_OLD_SPACE_SIZE:-128} server.js"]
+CMD ["/app/bin/start.sh"]
 
 # Optional: rebuild plugin deps after adding third-party plugins
 # Usage: docker build --target with-plugins -t camofox-browser .

@@ -70,7 +70,7 @@ while true; do
     CURRENT_DISPLAY="$FOUND"
     log "Attaching x11vnc to DISPLAY=$CURRENT_DISPLAY"
 
-    X11VNC_ARGS="-display $CURRENT_DISPLAY -forever -shared -rfbport $VNC_PORT -noxdamage -noshm -clipboard -quiet -bg -o /var/log/x11vnc.log"
+    X11VNC_ARGS="-display $CURRENT_DISPLAY -forever -shared -rfbport $VNC_PORT -noxdamage -noshm -quiet -bg -o /var/log/x11vnc.log"
     [ "${VIEW_ONLY:-0}" = "1" ] && X11VNC_ARGS="$X11VNC_ARGS -viewonly"
     if [ -n "$PASSFILE" ]; then
       X11VNC_ARGS="$X11VNC_ARGS -rfbauth $PASSFILE"

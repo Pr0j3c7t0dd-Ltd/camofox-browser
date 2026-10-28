@@ -19,10 +19,13 @@ open_welcome_tab() {
 }
 
 welcome_tab_open() {
-  tabs=$(curl -sf "http://localhost:${PORT}/tabs" \
+  tabs=$(curl -sf "http://localhost:${PORT}/tabs?userId=${SESSION_USER_ID}" \
     ${CAMOFOX_ACCESS_KEY:+-H "Authorization: Bearer $CAMOFOX_ACCESS_KEY"} 2>/dev/null)
-  # true if any tab exists (the welcome tab is the only one at idle)
-  echo "$tabs" | grep -qv '"tabs":\[\]'
+  # true if this user already has a tab (the welcome tab is the only one at idle).
+  # The list is `{"running":true,"tabs":[{...}]}`; any tabId means open. Testing
+  # `"tabs":[]` against an empty/errored response reported "closed" every cycle,
+  # which reopened a welcome tab over whatever the human was on.
+  echo "$tabs" | grep -q '"tabId"'
 }
 
 # Start the server in the background

@@ -31,6 +31,7 @@ import {
   startMemoryReporter, stopMemoryReporter,
 } from './lib/metrics.js';
 import { actionFromReq, classifyError } from './lib/request-utils.js';
+import { resolveDisplay } from './lib/display.js';
 import { cleanupOrphanedTempFiles, cleanupStaleFirefoxProfiles } from './lib/tmp-cleanup.js';
 import { coalesceInflight } from './lib/inflight.js';
 import { createReporter, createTabHealthTracker, collectResourceSnapshot, classifyProxyError, browserProcessTreeRssMb } from './lib/reporter.js';
@@ -707,7 +708,7 @@ async function probeGoogleSearch(candidateBrowser) {
   let context = null;
   try {
     context = await candidateBrowser.newContext({
-      viewport: { width: 1280, height: 720 },
+      viewport: resolveDisplay().viewport,
       permissions: ['geolocation'],
     });
     const page = await context.newPage();
@@ -1177,7 +1178,7 @@ async function getSession(userId, { trace = false } = {}) {
       }
       const b = await ensureBrowser();
       const contextOptions = {
-        viewport: { width: 1280, height: 720 },
+        viewport: resolveDisplay().viewport,
         permissions: ['geolocation'],
       };
       // When geoip is active (proxy configured), camoufox auto-configures

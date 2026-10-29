@@ -12,6 +12,24 @@ describe('vnc launcher config', () => {
     expect(config.resolution).toBe('1280x720x24');
   });
 
+  test('CAMOFOX_DISPLAY drives the screen size, plus chrome, when VNC_RESOLUTION is unset', () => {
+    const config = resolveVncConfig(
+      { enabled: true, resolution: '1920x1080' },
+      { ENABLE_VNC: '1', CAMOFOX_DISPLAY: '1024x640' }
+    );
+
+    expect(config.resolution).toBe('1024x697x24');
+  });
+
+  test('an explicit VNC_RESOLUTION still wins over CAMOFOX_DISPLAY', () => {
+    const config = resolveVncConfig(
+      { enabled: true },
+      { ENABLE_VNC: '1', CAMOFOX_DISPLAY: '1024x640', VNC_RESOLUTION: '1600x900' }
+    );
+
+    expect(config.resolution).toBe('1600x900x24');
+  });
+
   test('buildWatcherEnv only includes watcher env whitelist', () => {
     const env = buildWatcherEnv(
       {

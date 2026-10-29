@@ -6,6 +6,7 @@
 import { spawn } from './spawn.js';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { resolveDisplay } from '../../lib/display.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -28,7 +29,13 @@ function compactEnv(env) {
 export function resolveVncConfig(pluginConfig = {}, env = process.env) {
   const enabled = envFlagEnabled(env.ENABLE_VNC) || pluginConfig.enabled === true;
 
-  const rawResolution = env.VNC_RESOLUTION || pluginConfig.resolution || '1920x1080';
+  // Screen size precedence: explicit VNC_RESOLUTION > the CAMOFOX_DISPLAY knob
+  // (which also drives the page viewport, see lib/display.js -- the screen adds
+  // the browser chrome so the window is never clipped) > plugin config.
+  const rawResolution = env.VNC_RESOLUTION
+    || (env.CAMOFOX_DISPLAY ? resolveDisplay(env).screenString : '')
+    || pluginConfig.resolution
+    || '1920x1080';
   const resolution = rawResolution.includes('x', rawResolution.indexOf('x') + 1)
     ? rawResolution
     : `${rawResolution}x24`;

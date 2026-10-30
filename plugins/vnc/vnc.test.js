@@ -209,7 +209,7 @@ describe('vnc plugin', () => {
     events.emit('browser:launching', { options });
 
     expect(options.firefoxUserPrefs).toMatchObject({
-      'widget.gtk.overlay-scrollbars': false,
+      'widget.gtk.overlay-scrollbars.enabled': false,
       'ui.useOverlayScrollbars': false,
       'existing.pref': true,
     });

@@ -107,10 +107,14 @@ export async function register(app, ctx, pluginConfig = {}) {
   // chrome of their own: an auto-hiding overlay scrollbar (Firefox's Linux
   // default) is indistinguishable from "this page does not scroll". Force the
   // classic always-drawn scrollbar so the viewer can see there is more page.
+  //
+  // The pref is `widget.gtk.overlay-scrollbars.enabled` -- the near-identical
+  // `widget.gtk.overlay-scrollbars` is NOT a thing and silently does nothing
+  // (verified: scrollbarPx stayed 0 until the .enabled suffix was added).
   events.on('browser:launching', ({ options } = {}) => {
     if (!options) return;
     options.firefoxUserPrefs = {
-      'widget.gtk.overlay-scrollbars': false,
+      'widget.gtk.overlay-scrollbars.enabled': false,
       'ui.useOverlayScrollbars': false,
       ...(options.firefoxUserPrefs || {}),
     };

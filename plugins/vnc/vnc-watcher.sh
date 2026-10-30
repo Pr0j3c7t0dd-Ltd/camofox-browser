@@ -46,6 +46,34 @@ websockify --web "$NOVNC_DIR" "$VNC_BIND:$NOVNC_PORT" "127.0.0.1:$VNC_PORT" >/va
 
 log "VNC watcher started -- will attach x11vnc when Camoufox's Xvfb appears"
 
+# Popups open at whatever size the site asks for: Google's sign-in popup is about
+# 500x700, so most of the form -- including the fields the human has to type into --
+# falls outside the window, and with decorations off there is no edge to drag.
+# Stretch each *new* secondary window to the display once, then leave it alone so the
+# human can still resize it deliberately (Alt+Right-drag, see the openbox rc).
+FIT_TRIED=""
+fit_new_windows() {
+  [ -n "$CURRENT_DISPLAY" ] || return 0
+  SCREEN=$(DISPLAY="$CURRENT_DISPLAY" xdpyinfo 2>/dev/null | awk '/dimensions:/{print $2; exit}') || return 0
+  [ -n "$SCREEN" ] || return 0
+  SW=${SCREEN%x*}
+  SH=${SCREEN#*x}
+  for id in $(DISPLAY="$CURRENT_DISPLAY" xdotool search --onlyvisible --name . 2>/dev/null || true); do
+    case " $FIT_TRIED " in *" $id "*) continue ;; esac
+    GEOM=$(DISPLAY="$CURRENT_DISPLAY" xdotool getwindowgeometry --shell "$id" 2>/dev/null) || continue
+    eval "$GEOM" 2>/dev/null || continue
+    # Ignore helper windows (10x10, 1x1) and anything already filling the screen.
+    [ "${WIDTH:-0}" -ge 200 ] || continue
+    [ "${HEIGHT:-0}" -ge 200 ] || continue
+    FIT_TRIED="$FIT_TRIED $id"
+    if [ "$WIDTH" -lt "$SW" ] || [ "$HEIGHT" -lt "$SH" ]; then
+      DISPLAY="$CURRENT_DISPLAY" xdotool windowsize "$id" "$SW" "$SH" 2>/dev/null || true
+      DISPLAY="$CURRENT_DISPLAY" xdotool windowmove "$id" 0 0 2>/dev/null || true
+      log "stretched new window $id (${WIDTH}x${HEIGHT} -> ${SW}x${SH})"
+    fi
+  done
+}
+
 while true; do
   # Find the display number by looking at X11 Unix sockets.
   # camoufox-js launches Xvfb with -displayfd (no :N in args), so we cannot
@@ -101,5 +129,6 @@ while true; do
     fi
   fi
 
+  fit_new_windows
   sleep 2
 done

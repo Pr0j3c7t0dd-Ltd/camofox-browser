@@ -8,3 +8,7 @@ procps
 # Window manager: without one, every browser window lands at 0,0 unraised and
 # popups (Google/OAuth sign-in) cannot be focused or cycled.
 openbox
+# Window geometry: popups open at the site's requested size (Google's sign-in is
+# ~500x700) and decorations are off, so the watcher stretches them to the display
+# and a human resizes with Alt+Right-drag.
+xdotool

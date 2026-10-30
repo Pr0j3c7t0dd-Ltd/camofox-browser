@@ -105,7 +105,45 @@ cat > /etc/camofox/openbox-rc.xml <<'XML'
     <keybind key="C-A-Left"><action name="PreviousWindow"><dialog>none</dialog></action></keybind>
     <keybind key="C-A-Right"><action name="NextWindow"><dialog>none</dialog></action></keybind>
     <keybind key="A-F4"><action name="Close"/></keybind>
+    <keybind key="A-F10"><action name="ToggleMaximize"><direction>both</direction></action></keybind>
+    <keybind key="C-A-F"><action name="ToggleFullscreen"/></keybind>
+    <!-- Decorations are off and Firefox takes the pointer on press, so Alt+drag
+         never reaches the WM. Resize with the keyboard instead: the focused
+         window grows/shrinks 40px per press. -->
+    <keybind key="C-A-S-Right"><action name="ResizeRelative"><right>40</right></action></keybind>
+    <keybind key="C-A-S-Left"><action name="ResizeRelative"><right>-40</right></action></keybind>
+    <keybind key="C-A-S-Down"><action name="ResizeRelative"><bottom>40</bottom></action></keybind>
+    <keybind key="C-A-S-Up"><action name="ResizeRelative"><bottom>-40</bottom></action></keybind>
   </keyboard>
+  <mouse>
+    <!-- Decorations are off, so there is no titlebar or edge to grab. Alt+Left
+         drags a window, Alt+Right drags its corner to resize: the only way to
+         resize a popup (or the browser) on this display. -->
+    <context name="Frame">
+      <mousebind button="A-Left" action="Press">
+        <action name="Focus"/>
+        <action name="Raise"/>
+      </mousebind>
+      <mousebind button="A-Left" action="Drag">
+        <action name="Move"/>
+      </mousebind>
+      <mousebind button="A-Right" action="Drag">
+        <action name="Resize"/>
+      </mousebind>
+    </context>
+    <context name="Client">
+      <mousebind button="A-Left" action="Press">
+        <action name="Focus"/>
+        <action name="Raise"/>
+      </mousebind>
+      <mousebind button="A-Left" action="Drag">
+        <action name="Move"/>
+      </mousebind>
+      <mousebind button="A-Right" action="Drag">
+        <action name="Resize"/>
+      </mousebind>
+    </context>
+  </mouse>
 </openbox_config>
 XML
 

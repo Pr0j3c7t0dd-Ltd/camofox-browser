@@ -32,12 +32,19 @@ import {
 } from './lib/metrics.js';
 import { actionFromReq, classifyError } from './lib/request-utils.js';
 import { resolveDisplay } from './lib/display.js';
+import { buildScrollIndicatorScript } from './lib/scroll-indicator.js';
 import { cleanupOrphanedTempFiles, cleanupStaleFirefoxProfiles } from './lib/tmp-cleanup.js';
 import { coalesceInflight } from './lib/inflight.js';
 import { createReporter, createTabHealthTracker, collectResourceSnapshot, classifyProxyError, browserProcessTreeRssMb } from './lib/reporter.js';
 import { mountDocs } from './lib/openapi.js';
 import { initSentry, captureException as sentryCaptureException, setupExpressErrorHandler as setupSentryErrorHandler, flush as sentryFlush } from './lib/sentry.js';
 import { prepareExternalCamoufoxExecutable } from './lib/camoufox-executable.js';
+
+// Draw an always-visible scrollbar on every page: Firefox's own is an overlay
+// that never appears at rest, which is useless to someone watching over VNC.
+// Set CAMOFOX_SCROLL_INDICATOR=0 to leave pages untouched (breaks nothing).
+const CAMOFOX_SCROLL_INDICATOR = process.env.CAMOFOX_SCROLL_INDICATOR !== '0';
+const CAMOFOX_SCROLL_INDICATOR_SCRIPT = buildScrollIndicatorScript();
 
 const CONFIG = loadConfig();
 
@@ -1210,6 +1217,18 @@ async function getSession(userId, { trace = false } = {}) {
       }
       await pluginEvents.emitAsync('session:creating', { userId: key, contextOptions });
       const context = await b.newContext(contextOptions);
+
+      // Firefox renders overlay scrollbars that never take layout space and only
+      // appear while actively scrolling, so a human watching this display over VNC
+      // sees no scrollbar and concludes the page cannot scroll. Draw one instead
+      // (see lib/scroll-indicator.js). Every page inherits it, popups included.
+      if (CAMOFOX_SCROLL_INDICATOR) {
+        try {
+          await context.addInitScript({ content: CAMOFOX_SCROLL_INDICATOR_SCRIPT });
+        } catch (err) {
+          log('warn', 'failed to install scroll indicator', { error: err.message });
+        }
+      }
 
       let tracePath = null;
       if (trace) {

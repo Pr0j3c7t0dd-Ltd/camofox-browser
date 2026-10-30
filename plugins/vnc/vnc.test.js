@@ -201,4 +201,23 @@ describe('vnc plugin', () => {
     events.emit('server:shutdown');
     expect(proc.kill).toHaveBeenCalledWith('SIGTERM');
   });
+
+  test('forces persistent scrollbars on browser:launching', async () => {
+    await register(mockApp, ctx, { enabled: true });
+
+    const options = { firefoxUserPrefs: { 'existing.pref': true } };
+    events.emit('browser:launching', { options });
+
+    expect(options.firefoxUserPrefs).toMatchObject({
+      'widget.gtk.overlay-scrollbars': false,
+      'ui.useOverlayScrollbars': false,
+      'existing.pref': true,
+    });
+  });
+
+  test('browser:launching hook tolerates a payload without options', async () => {
+    await register(mockApp, ctx, { enabled: true });
+
+    expect(() => events.emit('browser:launching', {})).not.toThrow();
+  });
 });

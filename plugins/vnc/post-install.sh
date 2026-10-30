@@ -58,3 +58,55 @@ cat > "${NOVNC_DIR}/index.html" <<'HTML'
 HTML
 
 echo "[vnc/post-install] noVNC entrypoint written to ${NOVNC_DIR}/index.html"
+
+# openbox config for the remote display. Decorations are OFF on purpose: the
+# Camoufox window is sized to fill the screen exactly (viewport + chrome, see
+# lib/display.js), so a titlebar would push its bottom edge off the display.
+# What the WM is here for is focus: raising the clicked window, focusing new
+# windows (so an OAuth popup comes to the front instead of hiding behind the
+# main window), and Alt+Tab to cycle.
+mkdir -p /etc/camofox
+cat > /etc/camofox/openbox-rc.xml <<'XML'
+<?xml version="1.0" encoding="UTF-8"?>
+<openbox_config xmlns="http://openbox.org/3.4/rc">
+  <theme>
+    <name>Clearlooks</name>
+    <titleLayout></titleLayout>
+    <keepBorder>no</keepBorder>
+    <animateIconify>no</animateIconify>
+  </theme>
+  <desktops>
+    <number>1</number>
+    <names><name>camofox</name></names>
+  </desktops>
+  <resize>
+    <drawContents>no</drawContents>
+  </resize>
+  <focus>
+    <focusNew>yes</focusNew>
+    <followMouse>no</followMouse>
+    <focusLast>yes</focusLast>
+    <raiseOnFocus>yes</raiseOnFocus>
+  </focus>
+  <placement>
+    <policy>Smart</policy>
+    <center>yes</center>
+  </placement>
+  <applications>
+    <application class="*">
+      <decor>no</decor>
+      <maximized>no</maximized>
+      <position force="no"/>
+    </application>
+  </applications>
+  <keyboard>
+    <keybind key="A-Tab"><action name="NextWindow"><dialog>none</dialog></action></keybind>
+    <keybind key="C-A-Tab"><action name="NextWindow"><dialog>none</dialog></action></keybind>
+    <keybind key="C-A-Left"><action name="PreviousWindow"><dialog>none</dialog></action></keybind>
+    <keybind key="C-A-Right"><action name="NextWindow"><dialog>none</dialog></action></keybind>
+    <keybind key="A-F4"><action name="Close"/></keybind>
+  </keyboard>
+</openbox_config>
+XML
+
+echo "[vnc/post-install] openbox config written to /etc/camofox/openbox-rc.xml"

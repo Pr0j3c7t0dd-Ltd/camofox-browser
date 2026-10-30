@@ -5,3 +5,6 @@ unzip
 # Utilities for display detection
 net-tools
 procps
+# Window manager: without one, every browser window lands at 0,0 unraised and
+# popups (Google/OAuth sign-in) cannot be focused or cycled.
+openbox

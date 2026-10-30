@@ -3758,6 +3758,35 @@ app.post('/tabs/:tabId/viewport', async (req, res) => {
   }
 });
 
+/**
+ * POST /tabs/{tabId}/focus
+ * Bring this tab's browser window to the front of the (headed) X display.
+ * Without it, two windows of the same size stack at 0,0 with no way to reach the
+ * one underneath — the observed symptom is "I'm stuck in the popup".
+ */
+app.post('/tabs/:tabId/focus', async (req, res) => {
+  try {
+    const { userId } = req.body;
+    if (!userId) return res.status(400).json({ error: 'userId is required' });
+
+    const session = sessions.get(normalizeUserId(userId));
+    const found = session && findTab(session, req.params.tabId);
+    if (!found) return tabNotFoundResponse(res, req.params.tabId || req.body?.tabId);
+    session.lastAccess = Date.now();
+
+    const { tabState } = found;
+    tabState.toolCalls++; tabState.consecutiveTimeouts = 0; tabState.consecutiveFailures = 0;
+
+    await tabState.page.bringToFront();
+    pluginEvents.emit('tab:focused', { userId, tabId: req.params.tabId });
+    log('info', 'tab focused', { reqId: req.reqId, tabId: req.params.tabId, userId });
+    res.json({ ok: true, tabId: req.params.tabId });
+  } catch (err) {
+    log('error', 'focus failed', { reqId: req.reqId, error: err.message });
+    handleRouteError(err, req, res);
+  }
+});
+
 // Back
 /**
  * @openapi

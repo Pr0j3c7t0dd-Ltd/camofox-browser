@@ -15,11 +15,13 @@ set -e
 VNC_PORT="${VNC_PORT:-5900}"
 NOVNC_PORT="${NOVNC_PORT:-6080}"
 VNC_RESOLUTION="${VNC_RESOLUTION:-1920x1080x24}"
+OPENBOX_RC="${OPENBOX_RC:-/etc/camofox/openbox-rc.xml}"
 
 log() { printf '[vnc-watcher] %s\n' "$*" >&2; }
 
 CURRENT_DISPLAY=""
 X11VNC_PID=""
+WM_PID=""
 
 # Prepare password file if requested
 PASSFILE=""
@@ -83,6 +85,20 @@ while true; do
     sleep 1
     X11VNC_PID=$(pgrep -f "x11vnc.*-display $CURRENT_DISPLAY" | head -1)
     log "x11vnc running (pid=$X11VNC_PID) on DISPLAY=$CURRENT_DISPLAY"
+
+    # Start the window manager. Without one, Camoufox windows are never raised or
+    # focused: every window sits at 0,0 with no way to reach the one underneath,
+    # and an OAuth popup cannot be left. openbox runs decoration-less (see the rc
+    # file) so the browser window keeps filling the screen exactly.
+    if [ -z "$WM_PID" ] || ! kill -0 "$WM_PID" 2>/dev/null; then
+      if command -v openbox >/dev/null 2>&1; then
+        DISPLAY="$CURRENT_DISPLAY" openbox --config-file "$OPENBOX_RC" >>/var/log/openbox.log 2>&1 &
+        WM_PID=$!
+        log "window manager started (openbox pid=$WM_PID) on DISPLAY=$CURRENT_DISPLAY"
+      else
+        log "WARNING: openbox not installed; windows cannot be raised or switched"
+      fi
+    fi
   fi
 
   sleep 2

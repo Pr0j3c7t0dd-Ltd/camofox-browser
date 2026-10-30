@@ -103,6 +103,20 @@ export async function register(app, ctx, pluginConfig = {}) {
     }
   });
 
+  // Persistent scrollbars. A human watching this display over VNC has no page
+  // chrome of their own: an auto-hiding overlay scrollbar (Firefox's Linux
+  // default) is indistinguishable from "this page does not scroll". Force the
+  // classic always-drawn scrollbar so the viewer can see there is more page.
+  events.on('browser:launching', ({ options } = {}) => {
+    if (!options) return;
+    options.firefoxUserPrefs = {
+      'widget.gtk.overlay-scrollbars': false,
+      'ui.useOverlayScrollbars': false,
+      ...(options.firefoxUserPrefs || {}),
+    };
+    log('info', 'vnc plugin: forced persistent scrollbars');
+  });
+
   // --- HTTP endpoint: GET /sessions/:userId/storage_state ---
   const authMiddleware = requireAuth(config);
 

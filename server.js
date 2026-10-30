@@ -940,6 +940,11 @@ async function launchBrowserInstance() {
   const maxAttempts = proxyPool?.launchRetries ?? 1;
   let lastError = null;
   const externalCamoufox = getExternalCamoufoxLaunch();
+  // Camoufox picks a random window size when none is given, and that random size
+  // wins over the Playwright viewport -- the page then renders smaller than the
+  // display (seen: 1440x867 inside 1600x1057). Pin it to the configured viewport.
+  const launchViewport = resolveDisplay().viewport;
+  const launchWindowSize = [launchViewport.width, launchViewport.height];
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const launchProxy = proxyPool
@@ -981,6 +986,11 @@ async function launchBrowserInstance() {
         os: hostOS,
         humanize: true,
         enable_cache: true,
+        // Pin the window instead of letting Camoufox generate a random one: the
+        // layout viewport then matches CAMOFOX_DISPLAY, so the page fills the
+        // screen. Left random, it comes out smaller (e.g. 1440x867 on a
+        // 1600x1057 display) and the human sees the page boxed in dead space.
+        window: launchWindowSize,
         proxy: launchProxy,
         geoip: !!launchProxy,
         virtual_display: vdDisplay,

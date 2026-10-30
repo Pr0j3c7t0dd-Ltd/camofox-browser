@@ -103,22 +103,29 @@ export async function register(app, ctx, pluginConfig = {}) {
     }
   });
 
-  // Persistent scrollbars. A human watching this display over VNC has no page
-  // chrome of their own: an auto-hiding overlay scrollbar (Firefox's Linux
-  // default) is indistinguishable from "this page does not scroll". Force the
-  // classic always-drawn scrollbar so the viewer can see there is more page.
+  // Persistent scrollbars: ask for the documented non-overlay behaviour, so a
+  // human watching this display over VNC sees a scrollbar instead of Firefox's
+  // auto-hiding overlay (which reads as "this page does not scroll").
   //
-  // The pref is `widget.gtk.overlay-scrollbars.enabled` -- the near-identical
-  // `widget.gtk.overlay-scrollbars` is NOT a thing and silently does nothing
-  // (verified: scrollbarPx stayed 0 until the .enabled suffix was added).
+  // KNOWN LIMIT, measured on the shipped build (Camoufox / Firefox 152, headed on
+  // Xvfb): this pref is currently INERT -- the layout gutter
+  // (offsetWidth - clientWidth on a scrolling div) stays 0, and no bar is drawn.
+  // Prefs do reach the browser (checked with `font.minimum-size.x-western`, which
+  // really did change layout), and so do these, so the browser is ignoring the
+  // behaviour rather than dropping the pref. Also tried and likewise inert here:
+  // `layout.testing.overlay-scrollbars.always-visible` (it only changes Camoufox's
+  // spoofed innerWidth -- a trap, see references/display-and-scrollbars.md),
+  // `widget.non-native-theme.scrollbar.size.override`, `widget.disable-dark-scrollbar`,
+  // GtkSettings `gtk-overlay-scrolling=false` and a custom ~/.config/gtk-3.0/gtk.css.
+  // Keep the pref (correct intent, free if a future build honours it); do not
+  // assume it is why a scrollbar is or is not visible.
   events.on('browser:launching', ({ options } = {}) => {
     if (!options) return;
     options.firefoxUserPrefs = {
       'widget.gtk.overlay-scrollbars.enabled': false,
-      'ui.useOverlayScrollbars': false,
       ...(options.firefoxUserPrefs || {}),
     };
-    log('info', 'vnc plugin: forced persistent scrollbars');
+    log('info', 'vnc plugin: requested non-overlay scrollbars');
   });
 
   // --- HTTP endpoint: GET /sessions/:userId/storage_state ---

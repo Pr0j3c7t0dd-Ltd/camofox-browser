@@ -123,6 +123,11 @@ export async function register(app, ctx, pluginConfig = {}) {
     if (!options) return;
     options.firefoxUserPrefs = {
       'widget.gtk.overlay-scrollbars.enabled': false,
+      // Give the address bar the top row. Firefox otherwise draws a title bar
+      // above the toolbar, so on the scaled remote display the URL field is a
+      // ~27 px strip in the second row: a human aiming for it lands on the title
+      // bar and typing appears to do nothing.
+      'browser.tabs.inTitlebar': 0,
       ...(options.firefoxUserPrefs || {}),
     };
     log('info', 'vnc plugin: requested non-overlay scrollbars');

@@ -43,11 +43,18 @@ cat > "${NOVNC_DIR}/index.html" <<'HTML'
   <title>Camofox display</title>
   <script>
     // autoconnect + scale: the display fills the window, no params to remember.
+    // view_only=false is not cosmetic: a view-only noVNC session never grabs the
+    // keyboard (core/rfb.js: `if (!this._viewOnly) { this._keyboard.grab(); }`),
+    // so every keystroke is dropped while clicks still work. The setting is sticky
+    // in localStorage, so one accidental ?view_only=true would silently break
+    // typing for that browser until it was cleared.
+    try { localStorage.setItem('view_only', 'false'); } catch (e) {}
     location.replace('vnc.html?' + new URLSearchParams({
       autoconnect: 'true',
       resize: 'scale',
       view_clip: '0',
       reconnect: 'true',
+      view_only: 'false',
     }));
   </script>
 </head>
@@ -148,3 +155,80 @@ cat > /etc/camofox/openbox-rc.xml <<'XML'
 XML
 
 echo "[vnc/post-install] openbox config written to /etc/camofox/openbox-rc.xml"
+
+# Keystroke probe: shows how many keystrokes the remote browser actually received.
+# A human whose typing "does nothing" can open /keys.html over noVNC and watch the
+# counter: 0 means the client never delivered the keys, non-zero means they arrive
+# and the problem is focus in the page/address bar instead. Ansynchronous, reads
+# nothing, sends nothing.
+cat > "${NOVNC_DIR}/keys.html" <<'HTML'
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Keyboard probe - Camofox display</title>
+  <style>
+    :root { color-scheme: dark; }
+    body { margin: 0; padding: 28px 32px; background: #14161a; color: #e8eaed;
+           font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+    h1 { font-size: 22px; margin: 0 0 6px; font-weight: 650; }
+    p { margin: 0 0 18px; color: #9aa0a6; max-width: 62ch; }
+    #count { font-size: 72px; font-weight: 700; line-height: 1; color: #8ab4f8; }
+    #count.zero { color: #f28b82; }
+    .row { display: flex; gap: 28px; flex-wrap: wrap; margin: 22px 0 0; }
+    .cell { background: #1e2126; border: 1px solid #33373d; border-radius: 10px;
+            padding: 12px 16px; min-width: 190px; }
+    .k { color: #9aa0a6; font-size: 12px; letter-spacing: .04em; text-transform: uppercase; }
+    .v { font: 20px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace; margin-top: 4px;
+         word-break: break-all; }
+    #log { margin-top: 22px; background: #1e2126; border: 1px solid #33373d; border-radius: 10px;
+           padding: 12px 16px; font: 14px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace;
+           min-height: 60px; max-height: 320px; overflow: auto; white-space: pre-wrap; }
+    #probe { margin-top: 22px; width: 100%; max-width: 520px; box-sizing: border-box;
+             background: #1e2126; color: #e8eaed; border: 1px solid #5f6368; border-radius: 10px;
+             padding: 14px 16px; font-size: 20px; }
+    .hint { margin-top: 10px; color: #9aa0a6; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <h1>Keyboard probe</h1>
+  <p>Type a few characters now - anywhere on this page. Only the shape of each
+     keystroke is recorded (key, physical code, keyCode). Nothing is sent anywhere.</p>
+  <div id="count" class="zero">0</div>
+  <div class="k" style="margin-top:6px">keystrokes received by this browser</div>
+  <div class="row">
+    <div class="cell"><div class="k">last key</div><div class="v" id="lkey">-</div></div>
+    <div class="cell"><div class="k">physical code</div><div class="v" id="lcode">-</div></div>
+    <div class="cell"><div class="k">keyCode</div><div class="v" id="lkc">-</div></div>
+    <div class="cell"><div class="k">modifiers</div><div class="v" id="lmod">-</div></div>
+  </div>
+  <input id="probe" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="type here too...">
+  <div class="hint">If the counter stays at 0 while you type, the keystrokes never reach the display.</div>
+  <div id="log"></div>
+  <script>
+    window.__keyProbe = { count: 0, last: null, started: new Date().toISOString() };
+    const el = (id) => document.getElementById(id);
+    function record(type, ev) {
+      window.__keyProbe.count++;
+      window.__keyProbe.last = { type: type, key: ev.key, code: ev.code, keyCode: ev.keyCode,
+        shift: ev.shiftKey, ctrl: ev.ctrlKey, alt: ev.altKey, meta: ev.metaKey };
+      el('count').textContent = window.__keyProbe.count;
+      el('count').className = '';
+      el('lkey').textContent = JSON.stringify(ev.key);
+      el('lcode').textContent = ev.code || 'Unidentified';
+      el('lkc').textContent = String(ev.keyCode);
+      el('lmod').textContent = [ev.ctrlKey && 'ctrl', ev.altKey && 'alt', ev.shiftKey && 'shift', ev.metaKey && 'meta']
+        .filter(Boolean).join('+') || 'none';
+      const line = type + '  key=' + JSON.stringify(ev.key) + '  code=' + (ev.code || '?');
+      const log = el('log');
+      log.textContent = (log.textContent + '\n' + line).trim().split('\n').slice(-40).join('\n');
+      log.scrollTop = log.scrollHeight;
+    }
+    addEventListener('keydown', (ev) => record('down', ev), true);
+    addEventListener('keyup', (ev) => record('up', ev), true);
+  </script>
+</body>
+</html>
+HTML
+
+echo "[vnc/post-install] keystroke probe written to ${NOVNC_DIR}/keys.html"

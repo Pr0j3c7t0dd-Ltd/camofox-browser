@@ -6060,7 +6060,15 @@ async function gracefulShutdown(signal) {
   if (shuttingDown) return;
   shuttingDown = true;
   log('info', 'shutting down', { signal });
-  pluginEvents.emit('server:shutdown', { signal });
+  // Two phases. Listeners on a single event run concurrently (emitAsync uses
+  // Promise.all), so a plugin that tears the browser down -- the VNC plugin kills
+  // its watcher and with it the display the browser is drawing to -- would race
+  // the plugin that has to ask the browser for its cookies and lose: the
+  // storage-state write died with "context or browser has been closed" and every
+  // login in the shared profile was lost on restart. Phase 1 lets plugins flush
+  // state while the browser is alive; phase 2 is the teardown.
+  await pluginEvents.emitAsync('server:shutdown:prepare', { signal }).catch(() => {});
+  await pluginEvents.emitAsync('server:shutdown', { signal }).catch(() => {});
 
   const forceTimeout = setTimeout(() => {
     log('error', 'shutdown timed out, forcing exit');

@@ -83,6 +83,61 @@ describe('persistence plugin', () => {
     expect(mockContext.storageState).toHaveBeenCalled();
   });
 
+  test('checkpoints on the shutdown prepare phase, before teardown runs', async () => {
+    await register(mockApp, ctx, { profileDir: tmpDir });
+
+    const order = [];
+    const mockContext = {
+      storageState: jest.fn(async ({ path: p }) => {
+        order.push('persist');
+        await fs.writeFile(p, JSON.stringify({ cookies: [], origins: [] }));
+      }),
+    };
+    // A teardown listener on server:shutdown, like the VNC plugin's
+    events.on('server:shutdown', () => order.push('teardown'));
+
+    await events.emitAsync('session:created', { userId: 'user-4', context: mockContext });
+    await events.emitAsync('server:shutdown:prepare', { signal: 'SIGTERM' });
+    await events.emitAsync('server:shutdown', { signal: 'SIGTERM' });
+
+    expect(mockContext.storageState).toHaveBeenCalled();
+    expect(order).toEqual(['persist', 'teardown']);
+  });
+
+  test('checkpoints after a navigation, which is when a login lands', async () => {
+    jest.useFakeTimers();
+    try {
+      process.env.CAMOFOX_CHECKPOINT_DEBOUNCE_MS = '10000';
+      await register(mockApp, ctx, { profileDir: tmpDir });
+
+      const mockContext = {
+        storageState: jest.fn(async ({ path: p }) => {
+          await fs.writeFile(p, JSON.stringify({ cookies: [], origins: [] }));
+        }),
+      };
+
+      await events.emitAsync('session:created', { userId: 'user-5', context: mockContext });
+      await events.emitAsync('tab:navigated', { userId: 'user-5', url: 'https://example.com/after-login' });
+
+      // Debounced: nothing written yet, the page may still be redirecting
+      expect(mockContext.storageState).not.toHaveBeenCalled();
+
+      // Several navigations inside the window collapse into one write
+      await events.emitAsync('tab:navigated', { userId: 'user-5', url: 'https://example.com/step2' });
+      await events.emitAsync('tab:navigated', { userId: 'user-5', url: 'https://example.com/step3' });
+
+      jest.advanceTimersByTime(10000);
+      jest.useRealTimers();
+      // Let the async write (mkdir + writeFile) settle on the real event loop
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      expect(mockContext.storageState).toHaveBeenCalledTimes(1);
+    } finally {
+      jest.useRealTimers();
+      delete process.env.CAMOFOX_CHECKPOINT_DEBOUNCE_MS;
+    }
+  });
+
   test('env var CAMOFOX_PROFILE_DIR overrides pluginConfig', async () => {
     const envDir = path.join(tmpDir, 'env-override');
     const orig = process.env.CAMOFOX_PROFILE_DIR;

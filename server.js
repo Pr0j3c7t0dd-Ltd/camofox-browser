@@ -643,21 +643,6 @@ const healthState = {
   activeOps: 0,
 };
 
-// Reusable health-probe page. A fresh context per probe means a fresh content
-// process per probe (Firefox fission), ~200 MB each, and they pile up: an idle
-// browser that nobody is driving went from 6 to 15 content processes over a few
-// hours, and a probe that then hit its 5s timeout triggered a restart cascade.
-// One context, reused, keeps an idle-hour cost at zero.
-let probeContext = null;
-let probePage = null;
-
-async function dropProbePage() {
-  const ctx = probeContext;
-  probeContext = null;
-  probePage = null;
-  if (ctx) await ctx.close().catch(() => {});
-}
-
 function recordNavSuccess() {
   healthState.consecutiveNavFailures = 0;
   healthState.lastSuccessfulNav = Date.now();
@@ -675,8 +660,6 @@ async function restartBrowser(reason) {
   log('error', 'restarting browser', { reason, failures: healthState.consecutiveNavFailures });
   pluginEvents.emit('browser:restart', { reason });
   try {
-    // The probe context belongs to the browser that is going away
-    await dropProbePage();
     await closeAllSessions(`browser_restart:${reason}`, { clearDownloads: true, clearLocks: true });
     await closeBrowserFully(`browser_restart:${reason}`);
     pluginEvents.emit('browser:closed', { reason });
@@ -6039,17 +6022,39 @@ setInterval(async () => {
     log('warn', 'health probe forced despite active ops', { activeOps: healthState.activeOps, timeSinceSuccessMs: timeSinceSuccess });
   }
   
-  try {
-    if (!probeContext || !probePage || probePage.isClosed()) {
-      probeContext = await browser.newContext();
-      probePage = await probeContext.newPage();
+  // Probe through a page that already exists. A probe must never be the reason a
+  // window appears on the display: `browser.newContext()` opens a real window in
+  // headed mode, sized by the context's viewport (Playwright's default 1280x720)
+  // while the window itself is pinned to the display -- so it renders as a small
+  // page in a large blank window, on top of whatever the human is reading, and a
+  // reused one sits there for good. A protocol round-trip on a live page catches
+  // the same wedged browser without owning any window at all.
+  const probePages = [];
+  for (const [, session] of sessions) {
+    for (const page of session.context.pages()) {
+      if (!page.isClosed()) probePages.push(page);
     }
-    await probePage.goto('about:blank', { timeout: 5000 });
+  }
+
+  if (probePages.length === 0) {
+    // Nothing to talk to. isConnected() is the only signal available, and the
+    // next real operation surfaces a hung browser through the normal failure path.
+    healthState.lastSuccessfulNav = Date.now();
+    return;
+  }
+
+  try {
+    await withTimeout(probePages[0].evaluate(() => 1), 5000, 'health probe');
     healthState.lastSuccessfulNav = Date.now();
   } catch (err) {
+    if (!/timeout/i.test(err.message || '')) {
+      // The browser answered, just not with a result (e.g. the page was
+      // navigating). That is liveness, which is all the probe is asking.
+      healthState.lastSuccessfulNav = Date.now();
+      return;
+    }
     failuresTotal.labels('health_probe', 'internal').inc();
     log('warn', 'health probe failed', { error: err.message, timeSinceSuccessMs: timeSinceSuccess });
-    await dropProbePage();
     restartBrowser('health probe failed').catch(() => {});
   }
 }, 60_000);

@@ -77,10 +77,11 @@ export async function register(app, ctx, pluginConfig = {}) {
    */
   async function checkpoint(userId, context, reason) {
     if (!context) return;
-    let result = await persistStorageState({ profileDir, userId, context, logger: quietLogger });
+    // windowless: never make the browser open a window just to be checkpointed
+    let result = await persistStorageState({ profileDir, userId, context, logger: quietLogger, windowless: true });
     if (!result.persisted && result.reason === 'error') {
       await new Promise((resolve) => setTimeout(resolve, 1500));
-      result = await persistStorageState({ profileDir, userId, context, logger });
+      result = await persistStorageState({ profileDir, userId, context, logger, windowless: true });
     }
     if (result.persisted) {
       log('info', 'storage state persisted', { userId, reason, path: result.storageStatePath });

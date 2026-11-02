@@ -114,4 +114,34 @@ describe('profile persistence helpers', () => {
     const leftovers = (await fs.readdir(userDir)).filter((name) => name.includes('.tmp-'));
     expect(leftovers).toEqual([]);
   });
+
+  test('windowless persistence reads cookies and open pages instead of opening a window', async () => {
+    const context = {
+      cookies: jest.fn(async () => [{ name: 'auth', value: 'tok', domain: '.x.com', path: '/' }]),
+      pages: () => [
+        { isClosed: () => false, url: () => 'https://x.com/home', evaluate: async () => [{ name: 'k', value: 'v' }] },
+        { isClosed: () => false, url: () => 'about:blank', evaluate: async () => { throw new Error('must not run'); } },
+      ],
+      storageState: jest.fn(async () => {
+        throw new Error('storageState maps a visible window; it must not be used here');
+      }),
+    };
+
+    const result = await persistStorageState({
+      profileDir: tmpDir,
+      userId: 'user-w',
+      context,
+      logger: { warn: jest.fn() },
+      windowless: true,
+    });
+
+    expect(result.persisted).toBe(true);
+    expect(context.storageState).not.toHaveBeenCalled();
+
+    const saved = JSON.parse(await fs.readFile(result.storageStatePath, 'utf8'));
+    expect(saved.cookies).toEqual([{ name: 'auth', value: 'tok', domain: '.x.com', path: '/' }]);
+    expect(saved.origins).toEqual([
+      { origin: 'https://x.com', localStorage: [{ name: 'k', value: 'v' }] },
+    ]);
+  });
 });

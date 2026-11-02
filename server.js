@@ -643,6 +643,21 @@ const healthState = {
   activeOps: 0,
 };
 
+// Reusable health-probe page. A fresh context per probe means a fresh content
+// process per probe (Firefox fission), ~200 MB each, and they pile up: an idle
+// browser that nobody is driving went from 6 to 15 content processes over a few
+// hours, and a probe that then hit its 5s timeout triggered a restart cascade.
+// One context, reused, keeps an idle-hour cost at zero.
+let probeContext = null;
+let probePage = null;
+
+async function dropProbePage() {
+  const ctx = probeContext;
+  probeContext = null;
+  probePage = null;
+  if (ctx) await ctx.close().catch(() => {});
+}
+
 function recordNavSuccess() {
   healthState.consecutiveNavFailures = 0;
   healthState.lastSuccessfulNav = Date.now();
@@ -660,6 +675,8 @@ async function restartBrowser(reason) {
   log('error', 'restarting browser', { reason, failures: healthState.consecutiveNavFailures });
   pluginEvents.emit('browser:restart', { reason });
   try {
+    // The probe context belongs to the browser that is going away
+    await dropProbePage();
     await closeAllSessions(`browser_restart:${reason}`, { clearDownloads: true, clearLocks: true });
     await closeBrowserFully(`browser_restart:${reason}`);
     pluginEvents.emit('browser:closed', { reason });
@@ -6022,18 +6039,17 @@ setInterval(async () => {
     log('warn', 'health probe forced despite active ops', { activeOps: healthState.activeOps, timeSinceSuccessMs: timeSinceSuccess });
   }
   
-  let testContext;
   try {
-    testContext = await browser.newContext();
-    const page = await testContext.newPage();
-    await page.goto('about:blank', { timeout: 5000 });
-    await page.close();
-    await testContext.close();
+    if (!probeContext || !probePage || probePage.isClosed()) {
+      probeContext = await browser.newContext();
+      probePage = await probeContext.newPage();
+    }
+    await probePage.goto('about:blank', { timeout: 5000 });
     healthState.lastSuccessfulNav = Date.now();
   } catch (err) {
     failuresTotal.labels('health_probe', 'internal').inc();
     log('warn', 'health probe failed', { error: err.message, timeSinceSuccessMs: timeSinceSuccess });
-    if (testContext) await testContext.close().catch(() => {});
+    await dropProbePage();
     restartBrowser('health probe failed').catch(() => {});
   }
 }, 60_000);

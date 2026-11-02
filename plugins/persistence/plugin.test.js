@@ -138,6 +138,27 @@ describe('persistence plugin', () => {
     }
   });
 
+  test('retries once when a checkpoint fails mid-navigation', async () => {
+    await register(mockApp, ctx, { profileDir: tmpDir });
+
+    let calls = 0;
+    const mockContext = {
+      storageState: jest.fn(async ({ path: p }) => {
+        calls += 1;
+        // First attempt loses the race with a navigation, the retry lands
+        if (calls === 1) throw new Error('browserContext.storageState: NS_BINDING_ABORTED');
+        await fs.writeFile(p, JSON.stringify({ cookies: [], origins: [] }));
+      }),
+    };
+
+    await events.emitAsync('session:created', { userId: 'user-6', context: mockContext });
+    await events.emitAsync('session:destroying', { userId: 'user-6', reason: 'test' });
+
+    expect(mockContext.storageState).toHaveBeenCalledTimes(2);
+    // The transient failure is not reported; the retry succeeded silently
+    expect(ctx.log).not.toHaveBeenCalledWith('warn', 'failed to persist storage state', expect.anything());
+  }, 15000);
+
   test('env var CAMOFOX_PROFILE_DIR overrides pluginConfig', async () => {
     const envDir = path.join(tmpDir, 'env-override');
     const orig = process.env.CAMOFOX_PROFILE_DIR;

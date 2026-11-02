@@ -65,12 +65,23 @@ export async function register(app, ctx, pluginConfig = {}) {
   const pendingCheckpoints = new Map(); // userId -> debounce timer
   let intervalTimer = null;
 
+  // Checkpointing is now a background write, not a shutdown-only one, so it can
+  // land while a page is mid-navigation -- which makes storageState fail with
+  // NS_BINDING_ABORTED. That is transient, and it was the bulk of the noise in
+  // the log (107 failures against 54 successes). Swallow the first attempt's
+  // warning, let the navigation settle, retry once, and only then complain.
+  const quietLogger = { warn: () => {} };
+
   /**
    * Checkpoint storage state to disk for a userId.
    */
   async function checkpoint(userId, context, reason) {
     if (!context) return;
-    const result = await persistStorageState({ profileDir, userId, context, logger });
+    let result = await persistStorageState({ profileDir, userId, context, logger: quietLogger });
+    if (!result.persisted && result.reason === 'error') {
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      result = await persistStorageState({ profileDir, userId, context, logger });
+    }
     if (result.persisted) {
       log('info', 'storage state persisted', { userId, reason, path: result.storageStatePath });
     }

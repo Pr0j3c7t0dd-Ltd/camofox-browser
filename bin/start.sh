@@ -66,4 +66,10 @@ welcome_tab_open() {
 # container sat out the entire stop grace period -- while a direct
 # `kill -TERM <node pid>` from outside the container did work. So let the kernel
 # deliver the signal straight to node instead of routing it through a shell.
-exec node --max-old-space-size="${MAX_OLD_SPACE_SIZE:-128}" /app/server.js
+#
+# MAX_OLD_SPACE_SIZE defaults to 512, not the old 128: the server settles around
+# 105-110 MB of heap when a browser and a session are open, so a 128 MB cap is a
+# time bomb and it fired -- "FATAL ERROR: Reached heap limit Allocation failed",
+# which takes the whole service down mid-session. The container has no memory
+# limit and the host has plenty.
+exec node --max-old-space-size="${MAX_OLD_SPACE_SIZE:-512}" /app/server.js
